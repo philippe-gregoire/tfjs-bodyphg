@@ -91,13 +91,18 @@ function processSegmentation(videoCanvas,segmentation) {
   const videoImageData = videoCtx.getImageData(0, 0, w,h)
   const videoBuf = videoImageData.data;
   
+  // handle the image with a backdrop
   const testCtx = canvasCells.test.getContext("2d");
-  const imgBeach = document.getElementById("beach");
-  testCtx.drawImage(imgBeach,0,0,w,h);
+  const imgBack = document.getElementById("backdrop");
+  testCtx.drawImage(imgBack,0,0,w,h);
   
-  const textBuf=testCtx.getImageData(0, 0, w,h)
-  
-  testCtx.drawImage(imgBeach,0,0,w,h);
+  // testCtx.strokeStyle = "red"
+  // testCtx.beginPath();
+  // testCtx.moveTo(0, 0);
+  // testCtx.lineTo(w,h);
+  // testCtx.stroke();
+  const testImageData=testCtx.getImageData(0, 0, w,h)
+  const testBuf=testImageData.data
      
   // Init bounding box to full image
   var minX = w-1;
@@ -136,10 +141,10 @@ function processSegmentation(videoCanvas,segmentation) {
         colorBuf[n4+3]=videoBuf[n4+3]
         
         // test overlay
-        textBuf[n4]=videoBuf[n4]
-        textBuf[n4+1]=videoBuf[n4+1]
-        textBuf[n4+2]=videoBuf[n4+2]
-        textBuf[n4+3]=videoBuf[n4+3]
+        testBuf[n4]=videoBuf[n4]
+        testBuf[n4+1]=videoBuf[n4+1]
+        testBuf[n4+2]=videoBuf[n4+2]
+        testBuf[n4+3]=videoBuf[n4+3]
         
       } else {
         // This is a non-body pixel
@@ -158,7 +163,7 @@ function processSegmentation(videoCanvas,segmentation) {
   const height = maxY - minY;
   
   // Define scale factor to use to allow for false negatives around this region.
-  var scale = 1.3;
+  const scale = 1.3;
 
   //  Define scaled dimensions.
   const newWidth = width * scale;
@@ -171,11 +176,7 @@ function processSegmentation(videoCanvas,segmentation) {
   const newXMin = minX - offsetX;
   const newYMin = minY - offsetY;
   
-  const ghostCtx=canvasCells.ghost.getContext('2d')
-  
-  //.drawImage(video, 0, 0);
-  ghostCtx.putImageData(latestNonBodyImage, 0, 0);
-  
+  // utility function to find an array's element that is under the mouse in the given canvas
   function segValue(canvasElem,segArray) {
     const rect=canvasElem.getBoundingClientRect()
     const mX=mouseX-Math.floor(rect.left)
@@ -189,10 +190,20 @@ function processSegmentation(videoCanvas,segmentation) {
     }
   }
   
+  /* Prepare the 'gost' image */0
+  // Render accumulated non-body image in canvas
+  const ghostCtx=canvasCells.ghost.getContext('2d')
+  ghostCtx.putImageData(latestNonBodyImage, 0, 0);
+  
+  // If the showbox is selected, add the body box
   if (document.getElementById("showbox").checked) {
     ghostCtx.strokeStyle = "green"
     ghostCtx.beginPath();
     ghostCtx.rect(newXMin, newYMin, newWidth, newHeight);
+    ghostCtx.stroke();
+    ghostCtx.strokeStyle = "red"
+    ghostCtx.beginPath();
+    ghostCtx.rect(minX, minY, width, height);
     ghostCtx.stroke();
     
     // Plot segmentation value if within image
@@ -204,7 +215,7 @@ function processSegmentation(videoCanvas,segmentation) {
     }
   }
 
-  // Print colorized body parts
+  // Print image with body parts only
   const colorCtx=canvasCells.color.getContext('2d')
   colorCtx.putImageData(bodyImageData, 0, 0);
   const segVals=segValue(canvasCells.color,segmentation.data)
@@ -214,8 +225,8 @@ function processSegmentation(videoCanvas,segmentation) {
     colorCtx.fillText(`${segVals[0]}`,segVals[1],segVals[2])
   }
   
-  // Print person only in test area
-  testCtx.putImageData(textBuf, 0, 0);
+  // Print person on background in test area
+  testCtx.putImageData(testImageData, 0, 0);
 }
 
 
@@ -229,8 +240,13 @@ var model = undefined;
 model = bodyPix.load(bodyPixProperties).then(function (loadedModel) {
   model = loadedModel;
   modelHasLoaded = true;
+  
   // Show demo section now model is ready to use.
   document.getElementById('demos').classList.remove('invisible');
+  
+  // Stash backdrop image data and hide image
+  document.getElementById("backdrop").style.visibility = "hidden"
+  
 });
 
 
@@ -294,7 +310,6 @@ function enableCam(event) {
     });
     
     video.srcObject = stream;
-    
     video.addEventListener('loadeddata', predictWebcam);
   });
 }
@@ -308,8 +323,13 @@ canvasCells['video']=document.createElement('canvas')
 for(const cellId of canvasCellIDs) {
   let canvas = document.createElement('canvas');
   canvas.setAttribute('class', 'overlay');
-  console.log("cellId="+cellId)
-  document.getElementById('body'+cellId).appendChild(canvas);
+  const canvasElem=document.getElementById('body'+cellId)
+  if(canvasElem.childElementCount>0) {
+    canvasElem.insertBefore(canvas, canvasElem.childNodes[0]);
+  } else {
+    canvasElem.appendChild(canvas)
+  }
+  
   canvasCells[cellId]=canvas
 }
 
